@@ -19,7 +19,7 @@ edid_rw_path = os.path.join(script_dir, 'edid-rw', 'edid-rw')
 GITHUB_PAT = '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'
 
 # Hardcoded version
-VERSION = "1.0.05"
+VERSION = "1.0.06"
 
 def run_command(command, cwd=None):
     try:
@@ -124,6 +124,18 @@ def update_repo():
     # Log output for debugging
     print('Git pull stdout:', stdout)
     print('Git pull stderr:', stderr)
+    
+        # Detect if updates occurred
+    if "Already up-to-date" in stdout:
+        message = "Repository is already up-to-date. No changes pulled."
+        return jsonify({'message': message})
+    elif "Updating" in stdout:
+        message = "Repository updated successfully."
+        # Optional: trigger restart here
+        return jsonify({'message': message})
+    else:
+        # Handle case where output is different or unexpected
+        return jsonify({'message': 'Pull executed.', 'output': stdout})
     
     if stderr:
         return jsonify({'error': stderr, 'output': stdout}), 500
