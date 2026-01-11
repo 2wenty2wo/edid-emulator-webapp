@@ -93,7 +93,7 @@ function loadFile() {
 }
 
 // New function to read EDID directly from device
-function readEdid() {
+function read_edid() {
     fetch('/read_edid')
         .then(res => res.json())
         .then(data => {
