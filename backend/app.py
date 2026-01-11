@@ -13,7 +13,7 @@ app = Flask(__name__)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_DIR = os.path.join(SCRIPT_DIR, "edid_Files")
 EDID_RW_PATH = os.path.join(SCRIPT_DIR, "edid-rw", "edid-rw")
-VERSION = "1.0.11"
+VERSION = "1.0.12"
 
 GITHUB_PAT = os.environ.get("GITHUB_PAT")  # MUST be set in environment
 
