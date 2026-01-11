@@ -99,18 +99,16 @@ def verify_edid():
 
 @app.route('/update_repo', methods=['POST'])
 def update_repo():
-    passcode = request.get_json().get('passcode', '')
-    # Optional: add passcode check if needed
-    # if passcode != 'your_secure_passcode':
-    #     return jsonify({'error': 'Invalid passcode'}), 403
-
     if not GITHUB_PAT:
         return jsonify({'error': 'GitHub PAT not configured'}), 500
 
-    repo_dir = os.path.join(script_dir, 'your_repo_directory')  # replace with your repo folder
+    # Set repo_dir to parent directory of app.py
+    repo_dir = os.path.abspath(os.path.join(script_dir, '..'))
+
     repo_url = 'https://github.com/padge81/edid-emulator-webapp.git'
     auth_repo_url = repo_url.replace('https://', f'https://{GITHUB_PAT}@')
 
+    # Run git pull
     cmd = f'git -C "{repo_dir}" pull {auth_repo_url}'
     stdout, stderr = run_command(cmd)
     if stderr:
