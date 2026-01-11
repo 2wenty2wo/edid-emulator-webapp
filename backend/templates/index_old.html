@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>EDID Management</title>
 
 <style>
@@ -33,8 +33,6 @@ textarea {
 
 <select id="files"></select>
 <button onclick="loadFile()">Load & Preview</button>
-<!-- Added Read EDID Button -->
-<button onclick="readEdid()">Read EDID</button>
 
 <textarea id="preview" readonly></textarea>
 
@@ -42,7 +40,7 @@ textarea {
 <button onclick="verifyEdid()">Verify EDID</button>
 
 <h3>Repository</h3>
-<input type="password" id="passcode" placeholder="Optional passcode" />
+<input type="password" id="passcode" placeholder="Optional passcode">
 <button onclick="updateRepo()">Update Repository</button>
 
 <div id="status"></div>
@@ -71,7 +69,6 @@ function loadFiles() {
         });
 }
 
-// Load and display the selected file as hex
 function loadFile() {
     const file = document.getElementById("files").value;
     if (!file) return setStatus("Select a file first");
@@ -89,20 +86,6 @@ function loadFile() {
             }
             document.getElementById("preview").value = hex;
             setStatus("Loaded " + file);
-        });
-}
-
-// New function to read EDID directly from device
-function readEdid() {
-    fetch('/read_edid')
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) {
-                setStatus(data.error);
-            } else {
-                document.getElementById("preview").value = data.decoded_edid;
-                setStatus("EDID read successfully");
-            }
         });
 }
 
