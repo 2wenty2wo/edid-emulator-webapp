@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Create edid-rw directory in edid-emulator-webapp
+cd /edid-emulator-webapp
 sudo mkdir /edid-rw
 
 # Change into the edid-rw directory
