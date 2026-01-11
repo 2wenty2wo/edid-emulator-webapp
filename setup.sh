@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Create edid-rw directory in edid-emulator-webapp
-sudo mkdir /edid-emulator-webapp/edid-rw
+sudo mkdir /edid-rw
 
 # Change into the edid-rw directory
-cd /edid-emulator-webapp/edid-rw
+cd /edid-rw
 
 # Install prerequisites
 sudo apt-get install python3-smbus edid-decode
