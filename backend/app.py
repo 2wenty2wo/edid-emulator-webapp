@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import subprocess
 import os
 
@@ -10,7 +10,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Full path to the edid-rw executable
 edid_rw_path = os.path.join(script_dir, 'edid-rw', 'edid-rw')
 
-# Helper function to run shell commands with the correct path
+# Helper function to run commands safely
 def run_command(command):
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -18,22 +18,21 @@ def run_command(command):
     except Exception as e:
         return "", str(e)
 
-# Root route to confirm server is running
+# Route to serve the index page
 @app.route('/')
 def index():
-    return "EDID Management API is running."
+    return render_template('index.html')
 
 # Detect HDMI port (stub implementation)
 @app.route('/detect_hdmi', methods=['GET'])
 def detect_hdmi():
-    port = 2
+    port = 2  # assuming port 2 as default
     return jsonify({'port': port})
 
 # Read EDID data from HDMI port
 @app.route('/read_edid', methods=['GET'])
 def read_edid():
     port = request.args.get('port', default='2')
-    # Run edid-rw to read EDID and decode
     cmd = f"sudo \"{edid_rw_path}\" {port} | edid-decode"
     stdout, stderr = run_command(cmd)
     if stderr:
@@ -46,8 +45,7 @@ def save_edid():
     data = request.get_json()
     port = data.get('port', '2')
     filename = data.get('filename', 'EDID.bin')
-    # Save EDID to file
-    cmd = f"sudo \"{edid_rw_path}\" {port} > {filename}"
+    cmd = f"sudo \"{edid_rw_path}\" {port} > \"{filename}\""
     stdout, stderr = run_command(cmd)
     if stderr:
         return jsonify({'error': stderr}), 500
@@ -59,8 +57,7 @@ def write_edid():
     data = request.get_json()
     port = data.get('port', '2')
     filename = data.get('filename', 'EDID.bin')
-    # Write EDID from file
-    cmd = f"sudo \"{edid_rw_path}\" -w {port} < {filename}"
+    cmd = f"sudo \"{edid_rw_path}\" -w {port} < \"{filename}\""
     stdout, stderr = run_command(cmd)
     if stderr:
         return jsonify({'error': stderr}), 500
@@ -72,17 +69,16 @@ def verify_edid():
     data = request.get_json()
     port = data.get('port', '2')
     filename = data.get('filename', 'EDID.bin')
-
-    # Save current EDID to a temp file
     temp_file = 'current_EDID.bin'
-    cmd_read = f"sudo \"{edid_rw_path}\" {port} > {temp_file}"
+
+    # Save current EDID to temp file
+    cmd_read = f"sudo \"{edid_rw_path}\" {port} > \"{temp_file}\""
     run_command(cmd_read)
 
-    # Compare the saved EDID file with the provided one
-    cmd_diff = f"diff {filename} {temp_file}"
+    # Compare with provided file
+    cmd_diff = f"diff \"{filename}\" \"{temp_file}\""
     stdout, stderr = run_command(cmd_diff)
 
-    # If stdout is empty, files are identical
     match = (stdout.strip() == '')
     return jsonify({'match': match})
 
