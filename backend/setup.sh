@@ -8,5 +8,5 @@ cd edid-rw
 
 # Run a test read
 echo "Running test read..."
-./edid-rw 2 | edid-decode
+sudo ./edid-rw 2 | edid-decode
 echo "Test read completed."
