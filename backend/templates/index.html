@@ -5,7 +5,7 @@
 <title>EDID Management</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 20px; }
-  #edidPreview { width: 100%; height: 200px; overflow: auto; border: 1px solid #ccc; padding: 10px; white-space: pre; }
+  #edidPreview { width: 100%; height: 200px; overflow: auto; border: 1px solid #ccc; padding: 10px; white-space: pre; font-family: monospace; }
   select, input, button { margin: 10px 0; display: block; width: 300px; }
 </style>
 </head>
@@ -13,23 +13,20 @@
 
 <h2>EDID Files Management</h2>
 
-<!-- Load and preview -->
 <h3>Select Saved EDID File</h3>
 <select id="savedFilesDropdown"></select>
 <button onclick="loadAndPreview()">Load & Preview</button>
 
-<h4>EDID Preview</h4>
+<h4>EDID Preview (Hex)</h4>
 <textarea id="edidPreview" readonly></textarea>
 
-<!-- Buttons for actions -->
-<button onclick="writeFromPreview()">Write EDID to Device</button>
+<button onclick="writeFromPreview()">Write EDID</button>
 <button onclick="verifyEDID()">Verify EDID</button>
 
 <script>
-// Load list of saved files on page load
+// Load list of files on page load
 window.onload = loadSavedFiles;
 
-// Fetch list of saved files
 function loadSavedFiles() {
     fetch('/list_files')
         .then(res => res.json())
@@ -45,7 +42,7 @@ function loadSavedFiles() {
         });
 }
 
-// Load and preview selected EDID file
+// Load file, decode base64, show hex in preview
 function loadAndPreview() {
     const filename = document.getElementById('savedFilesDropdown').value;
     fetch('/read_edid_file?filename=' + encodeURIComponent(filename))
@@ -55,41 +52,40 @@ function loadAndPreview() {
                 alert('Error: ' + data.error);
                 document.getElementById('edidPreview').value = '';
             } else {
-                document.getElementById('edidPreview').value = data.edid_content;
+                const binaryStr = atob(data.edid_content);
+                let hexStr = '';
+                for (let i = 0; i < binaryStr.length; i++) {
+                    hexStr += ('0' + binaryStr.charCodeAt(i).toString(16)).slice(-2) + ' ';
+                    if ((i + 1) % 16 === 0) hexStr += '\n';
+                }
+                document.getElementById('edidPreview').value = hexStr;
             }
         });
 }
 
-// Write the EDID from the selected file to the device
+// Write from selected file
 function writeFromPreview() {
     const filename = document.getElementById('savedFilesDropdown').value;
     fetch('/write_edid_from_file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: filename, port: '2' }) // adjust port if needed
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert(data.message || data.error);
-    });
+        body: JSON.stringify({ filename: filename, port: '2' })
+    }).then(res => res.json())
+      .then(data => alert(data.message || data.error));
 }
 
-// Verify if current EDID matches the selected file
+// Verify current EDID matches file
 function verifyEDID() {
     const filename = document.getElementById('savedFilesDropdown').value;
     fetch('/verify_edid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: filename, port: '2' }) // adjust port if needed
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.match) {
-            alert('Verification successful: EDID matches.');
-        } else {
-            alert('Verification failed: EDID does not match.');
-        }
-    });
+        body: JSON.stringify({ filename: filename, port: '2' })
+    }).then(res => res.json())
+      .then(data => {
+        if (data.match) alert('Verification successful: EDID matches.');
+        else alert('Verification failed: EDID does not match.');
+      });
 }
 </script>
 

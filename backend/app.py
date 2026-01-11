@@ -1,24 +1,20 @@
 from flask import Flask, request, jsonify, render_template
 import subprocess
 import os
+import base64
 
 app = Flask(__name__)
 
-# Directory of this script
+# Directory setup
 script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Directory to save EDID files
 save_dir = os.path.join(script_dir, 'edid_Files')
-
-# Ensure save directory exists
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
-# Path to edid-rw executable
+# Path to edid-rw
 edid_rw_path = os.path.join(script_dir, 'edid-rw', 'edid-rw')
 
 def run_command(command):
-    """Execute shell command safely, return stdout and stderr."""
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         return result.stdout, result.stderr
@@ -31,8 +27,7 @@ def index():
 
 @app.route('/detect_hdmi', methods=['GET'])
 def detect_hdmi():
-    port = 2  # default port
-    return jsonify({'port': port})
+    return jsonify({'port': 2})
 
 @app.route('/read_edid', methods=['GET'])
 def read_edid():
@@ -43,15 +38,11 @@ def read_edid():
         return jsonify({'error': stderr}), 500
     return jsonify({'decoded_edid': stdout})
 
-# --- New routes for file listing, preview, write, and verification ---
+# --- New routes ---
 
 @app.route('/list_files', methods=['GET'])
 def list_files():
-    """Return list of saved EDID files."""
-    files = []
-    for f in os.listdir(save_dir):
-        if os.path.isfile(os.path.join(save_dir, f)):
-            files.append(f)
+    files = [f for f in os.listdir(save_dir) if os.path.isfile(os.path.join(save_dir, f))]
     return jsonify({'files': files})
 
 @app.route('/read_edid_file', methods=['GET'])
@@ -61,9 +52,10 @@ def read_edid_file():
     if not os.path.exists(filepath):
         return jsonify({'error': 'File not found'}), 404
     try:
-        with open(filepath, 'r') as f:
-            content = f.read()
-        return jsonify({'edid_content': content})
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        b64_data = base64.b64encode(data).decode('utf-8')
+        return jsonify({'edid_content': b64_data})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -93,7 +85,7 @@ def verify_edid():
     cmd_read = f"sudo \"{edid_rw_path}\" {port} > \"{temp_file}\""
     run_command(cmd_read)
 
-    # Compare with the saved file
+    # Compare with saved file
     cmd_diff = f"diff \"{filepath}\" \"{temp_file}\""
     stdout, _ = run_command(cmd_diff)
 
@@ -101,5 +93,4 @@ def verify_edid():
     return jsonify({'match': match})
 
 if __name__ == '__main__':
-    # Run Flask app
     app.run(host='0.0.0.0', port=5000)
