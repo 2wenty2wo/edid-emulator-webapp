@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify, render_template
 import subprocess
 import os
+import sys
+import signal
 
 app = Flask(__name__)
 
@@ -17,7 +19,7 @@ edid_rw_path = os.path.join(script_dir, 'edid-rw', 'edid-rw')
 GITHUB_PAT = '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'
 
 # Hardcoded version
-VERSION = "1.0.03"
+VERSION = "1.0.04"
 
 def run_command(command, cwd=None):
     try:
@@ -121,6 +123,22 @@ def update_repo():
     if stderr:
         return jsonify({'error': stderr, 'output': stdout}), 500
     return jsonify({'message': 'Repository updated successfully.', 'output': stdout})
+    
+    # After successful update, restart the app
+    # This will exit the process; if managed by systemd or supervisor, it will restart
+    def restart():
+        os.kill(os.getpid(), signal.SIGINT)
+
+    # Call the restart function after update
+    response = jsonify({'message': 'Repository updated successfully. Restarting...'})
+    response.status_code = 200
+
+    # Schedule restart after response sent
+    # Using threading to delay restart slightly
+    import threading
+    threading.Timer(1.0, restart).start()
+
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
