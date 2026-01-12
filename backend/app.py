@@ -100,23 +100,30 @@ def write_edid():
     if not os.path.isfile(path):
         return jsonify({"error": "EDID file not found"}), 404
 
-    # Write
-    _, stderr, rc = run_command([EDID_RW_PATH, port, path])
+    # WRITE (correct edid-rw syntax)
+    _, stderr, rc = run_command([
+        EDID_RW_PATH,
+        "-w",
+        "-f", path,
+        port
+    ])
     if rc != 0:
         return jsonify({"error": stderr}), 500
 
-    # Verify (read back)
+    # VERIFY (read back)
     stdout, stderr, rc = run_command([EDID_RW_PATH, port])
     if rc != 0:
         return jsonify({"written": True, "verified": False})
 
-    verified = file_hash(path) == hashlib.sha256(stdout.encode()).hexdigest()
+    verified = (
+        file_hash(path) ==
+        hashlib.sha256(stdout).hexdigest()
+    )
 
     return jsonify({
         "written": True,
         "verified": verified
     })
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
