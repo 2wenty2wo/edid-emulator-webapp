@@ -30,15 +30,20 @@ URL="http://127.0.0.1:5000"
 export DISPLAY=:0
 export XAUTHORITY="$HOME/.Xauthority"
 
-# --- Rotate DSI display to portrait (RIGHT) ---
+# Rotate DSI display to portrait
 xrandr --output DSI-1 --rotate right
 
-# --- Align touchscreen (FT5x06) ---
-xinput set-prop "10-0038 generic ft5x06" \
-  "Coordinate Transformation Matrix" \
-  0 1 0 \
- -1 0 1 \
-  0 0 1
+# Find FT5x06 touchscreen device ID dynamically
+TOUCH_ID=$(xinput list | grep -i 'ft5x06' | grep -o 'id=[0-9]*' | cut -d= -f2)
+
+if [ -n "$TOUCH_ID" ]; then
+    echo "Mapping touchscreen ID $TOUCH_ID to DSI-1"
+    xinput map-to-output "$TOUCH_ID" DSI-1
+else
+    echo "WARNING: Touchscreen device not found"
+fi
+
+
 
 cd "$BACKEND_DIR"
 
