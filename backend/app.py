@@ -2,6 +2,7 @@ import os
 import subprocess
 import hashlib
 import base64
+import difflib
 from flask import Flask, render_template, jsonify, request
 
 app = Flask(__name__)
@@ -9,7 +10,9 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_DIR = os.path.join(BASE_DIR, "edid_Files")
 EDID_RW_PATH = os.path.join(BASE_DIR, "edid-rw", "edid-rw")
+
 DEFAULT_PORT = "2"
+AVAILABLE_PORTS = ["0", "1", "2", "3"]
 
 
 def run_command(cmd, input_data=None):
@@ -21,11 +24,13 @@ def run_command(cmd, input_data=None):
     return p.stdout, p.stderr.decode(errors="ignore"), p.returncode
 
 
+def file_hash_bytes(data: bytes):
+    return hashlib.sha256(data).hexdigest()
+
+
 def file_hash(path):
-    h = hashlib.sha256()
     with open(path, "rb") as f:
-        h.update(f.read())
-    return h.hexdigest()
+        return file_hash_bytes(f.read())
 
 
 @app.route("/")
@@ -34,7 +39,12 @@ def index():
         f for f in os.listdir(SAVE_DIR)
         if os.path.isfile(os.path.join(SAVE_DIR, f))
     )
-    return render_template("index.html", files=files)
+    return render_template(
+        "index.html",
+        files=files,
+        ports=AVAILABLE_PORTS,
+        default_port=DEFAULT_PORT
+    )
 
 
 @app.route("/version")
@@ -58,7 +68,7 @@ def update_repo():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/read_and_compare_edid", methods=["GET"])
+@app.route("/read_and_compare_edid")
 def read_and_compare_edid():
     port = request.args.get("port", DEFAULT_PORT)
 
@@ -68,15 +78,13 @@ def read_and_compare_edid():
 
     binary_data = stdout
 
-    # Decode
     decode = subprocess.run(
         ["edid-decode"],
         input=binary_data,
         capture_output=True
     )
 
-    # Compare
-    current_hash = hashlib.sha256(binary_data).hexdigest()
+    current_hash = file_hash_bytes(binary_data)
     match = "UNKNOWN"
 
     for fname in os.listdir(SAVE_DIR):
@@ -99,16 +107,12 @@ def save_edid():
     name = data.get("filename")
     binary_b64 = data.get("binary")
 
-    if not name or not binary_b64:
-        return jsonify({"error": "Invalid request"}), 400
-
     path = os.path.join(SAVE_DIR, name)
     if os.path.exists(path):
         return jsonify({"error": "File already exists"}), 400
 
-    binary = base64.b64decode(binary_b64)
     with open(path, "wb") as f:
-        f.write(binary)
+        f.write(base64.b64decode(binary_b64))
 
     return jsonify({"saved": True})
 
@@ -123,32 +127,41 @@ def write_edid():
     if not os.path.isfile(path):
         return jsonify({"error": "EDID file not found"}), 404
 
-    # Load EDID
     with open(path, "rb") as f:
-        edid_data = f.read()
+        intended = f.read()
 
-    # WRITE (pipe to stdin)
+    # WRITE
     _, stderr, rc = run_command(
         [EDID_RW_PATH, "-w", "-f", port],
-        input_data=edid_data
+        input_data=intended
     )
 
     if rc != 0:
         return jsonify({"error": stderr}), 500
 
-    # VERIFY (read back)
-    stdout, stderr, rc = run_command([EDID_RW_PATH, port])
+    # READ BACK
+    read_back, stderr, rc = run_command([EDID_RW_PATH, port])
     if rc != 0:
         return jsonify({"written": True, "verified": False})
 
-    verified = (
-        file_hash(path) ==
-        hashlib.sha256(stdout).hexdigest()
-    )
+    ok = file_hash_bytes(intended) == file_hash_bytes(read_back)
+
+    diff = None
+    if not ok:
+        diff = "\n".join(
+            difflib.unified_diff(
+                intended.hex().split(),
+                read_back.hex().split(),
+                fromfile="intended",
+                tofile="read-back",
+                lineterm=""
+            )
+        )
 
     return jsonify({
         "written": True,
-        "verified": verified
+        "verified": ok,
+        "diff": diff
     })
 
 
