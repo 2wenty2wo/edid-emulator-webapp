@@ -1,133 +1,165 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>EDID Management</title>
+    <title>EDID Emulator WebApp</title>
+    <style>
+        body { font-family: Arial; max-width: 900px; margin: auto; }
+        textarea { width: 100%; height: 260px; margin-top: 10px; }
+        button { margin: 5px 5px 5px 0; }
+        select, input { margin: 5px 0; }
 
-<style>
-body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-}
-select, input, button {
-    margin: 6px 0;
-    width: 320px;
-}
-textarea {
-    width: 100%;
-    height: 220px;
-    font-family: monospace;
-}
-#status {
-    margin-top: 10px;
-    padding: 8px;
-    border: 1px solid #ccc;
-    background: #f8f8f8;
-}
-</style>
+        .status { padding: 8px; font-weight: bold; border-radius: 4px; }
+        .idle { background: #eee; }
+        .working { background: #ffeaa7; }
+        .success { background: #55efc4; }
+        .warning { background: #fab1a0; }
+        .error { background: #ff7675; }
+    </style>
 </head>
-
 <body>
 
-<h2>EDID Files Management</h2>
+<h2>EDID Emulator</h2>
 
-<select id="files"></select>
-<button onclick="loadFile()">Load & Preview</button>
+<button onclick="readEdid()">Read EDID</button>
+<button onclick="resetEdid()">Reset</button>
+<button id="toggleView" onclick="toggleView()" disabled>View: Binary</button>
+
+<p>Match: <b id="matchResult">—</b></p>
 
 <textarea id="preview" readonly></textarea>
 
-<button onclick="writeEdid()">Write EDID</button>
-<button onclick="verifyEdid()">Verify EDID</button>
+<h3>Save New EDID</h3>
+<input id="saveName" placeholder="filename.bin" disabled>
+<button id="saveBtn" onclick="saveEdid()" disabled>Save</button>
 
-<h3>Repository</h3>
-<input type="password" id="passcode" placeholder="Optional passcode">
-<button onclick="updateRepo()">Update Repository</button>
+<h3>Write EDID</h3>
+<select id="writeSelect">
+    <option value="">-- select --</option>
+    {% for f in files %}
+        <option value="{{ f }}">{{ f }}</option>
+    {% endfor %}
+</select>
+<button onclick="writeEdid()">Write</button>
 
-<div id="status"></div>
-
-<p>Version: {{ version }}</p>
+<div id="status" class="status idle">Idle</div>
 
 <script>
-const statusBox = document.getElementById("status");
+let binaryB64 = "";
+let decoded = "";
+let view = "binary";
 
-function setStatus(msg) {
-    statusBox.textContent = msg;
+function setStatus(msg, cls) {
+    const s = document.getElementById("status");
+    s.textContent = msg;
+    s.className = "status " + cls;
 }
 
-function loadFiles() {
-    fetch("/list_files")
+function readEdid() {
+    setStatus("Reading EDID...", "working");
+    fetch("/read_and_compare_edid")
         .then(r => r.json())
         .then(d => {
-            const sel = document.getElementById("files");
-            sel.innerHTML = "";
-            d.files.forEach(f => {
-                const o = document.createElement("option");
-                o.value = f;
-                o.textContent = f;
-                sel.appendChild(o);
-            });
-        });
-}
-
-function loadFile() {
-    const file = document.getElementById("files").value;
-    if (!file) return setStatus("Select a file first");
-
-    fetch(`/read_edid_file?filename=${encodeURIComponent(file)}`)
-        .then(r => r.json())
-        .then(d => {
-            if (d.error) return setStatus(d.error);
-
-            const bin = atob(d.edid_content);
-            let hex = "";
-            for (let i = 0; i < bin.length; i++) {
-                hex += bin.charCodeAt(i).toString(16).padStart(2, "0") + " ";
-                if ((i + 1) % 16 === 0) hex += "\n";
+            if (d.error) {
+                setStatus(d.error, "error");
+                return;
             }
-            document.getElementById("preview").value = hex;
-            setStatus("Loaded " + file);
+
+            binaryB64 = d.binary_b64;
+            decoded = d.decoded;
+
+            document.getElementById("matchResult").textContent = d.match;
+            document.getElementById("toggleView").disabled = false;
+
+            if (d.match === "UNKNOWN") {
+                document.getElementById("saveBtn").disabled = false;
+                document.getElementById("saveName").disabled = false;
+            } else {
+                document.getElementById("saveBtn").disabled = true;
+                document.getElementById("saveName").disabled = true;
+            }
+
+            setBinaryView();
+            setStatus("Read complete ✔", "success");
         });
 }
 
-function writeEdid() {
-    const file = document.getElementById("files").value;
-    if (!file) return setStatus("Select a file first");
-
-    fetch("/write_edid_from_file", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ filename: file, port: "2" })
-    })
-    .then(r => r.json())
-    .then(d => setStatus(d.message || d.error));
+function toggleView() {
+    view === "binary" ? setDecodedView() : setBinaryView();
 }
 
-function verifyEdid() {
-    const file = document.getElementById("files").value;
-    if (!file) return setStatus("Select a file first");
+function setBinaryView() {
+    view = "binary";
+    document.getElementById("toggleView").textContent = "View: Binary";
 
-    fetch("/verify_edid", {
+    const bin = atob(binaryB64);
+    let out = "";
+    for (let i = 0; i < bin.length; i++) {
+        out += bin.charCodeAt(i).toString(16).padStart(2, "0") + " ";
+        if ((i + 1) % 16 === 0) out += "\n";
+    }
+    document.getElementById("preview").value = out;
+}
+
+function setDecodedView() {
+    view = "decoded";
+    document.getElementById("toggleView").textContent = "View: Decoded";
+    document.getElementById("preview").value = decoded;
+}
+
+function saveEdid() {
+    const name = document.getElementById("saveName").value.trim();
+    if (!name) return alert("Enter filename");
+
+    fetch("/save_edid", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ filename: file, port: "2" })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: name, binary: binaryB64 })
     })
     .then(r => r.json())
     .then(d => {
-        setStatus(d.match ? "Verification successful" : "Verification failed");
+        if (d.error) {
+            setStatus(d.error, "error");
+        } else {
+            setStatus("Saved successfully ✔", "success");
+        }
     });
 }
 
-function updateRepo() {
-    fetch("/update_repo", {
+function writeEdid() {
+    const f = document.getElementById("writeSelect").value;
+    if (!f) return alert("Select file");
+
+    setStatus("Writing EDID...", "working");
+
+    fetch("/write_edid", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ passcode: document.getElementById("passcode").value })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: f })
     })
     .then(r => r.json())
-    .then(d => setStatus(d.message || d.error));
+    .then(d => {
+        if (d.error) {
+            setStatus("Write failed: " + d.error, "error");
+        } else if (d.verified) {
+            setStatus("Write complete ✔ Verified ✔", "success");
+        } else {
+            setStatus("Write complete ⚠ Verification FAILED", "warning");
+        }
+    });
 }
 
-loadFiles();
+function resetEdid() {
+    binaryB64 = "";
+    decoded = "";
+    view = "binary";
+    document.getElementById("preview").value = "";
+    document.getElementById("matchResult").textContent = "—";
+    document.getElementById("toggleView").disabled = true;
+    document.getElementById("saveBtn").disabled = true;
+    document.getElementById("saveName").disabled = true;
+    document.getElementById("saveName").value = "";
+    setStatus("Idle", "idle");
+}
 </script>
 
 </body>
