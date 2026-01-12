@@ -23,9 +23,11 @@
 
 <div style="display:flex; justify-content:space-between;">
     <div>Version: <b id="version">loading…</b></div>
-    <button onclick="updateRepo()">Update</button>
+    
 </div>
-
+<div class="space-around">
+<button onclick="updateRepo()">Update</button>
+</div>
 <hr>
 
 <div class="space-around">
@@ -39,7 +41,7 @@
     {% endfor %}
 </select>
 </div>
-<div>
+<div class="container">
     <button onclick="readEdid()">Read EDID</button>
     <button onclick="resetEdid()">Reset</button>
     <button id="toggleView" onclick="toggleView()" >View: Binary</button>
@@ -52,6 +54,7 @@
 <div class="container">
 <textarea id="preview" readonly></textarea>
 </div>
+<div class="space-around">
 <h3>Save New EDID</h3>
 <input id="saveName" placeholder="filename.bin" disabled>
 <button id="saveBtn" onclick="saveEdid()" disabled>Save</button>
@@ -66,6 +69,7 @@
 <button onclick="confirmWrite()">Write</button>
 
 <h3>Status</h3>
+</div>
 <div id="status" class="status idle">Idle</div>
 
 <div id="diffBlock" style="display:none;">
