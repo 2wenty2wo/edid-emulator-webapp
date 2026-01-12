@@ -79,7 +79,10 @@
     <h3>Verification Diff</h3>
     <pre id="diff"></pre>
 </div>
-
+<button style="background:#c0392b;color:white"
+        onclick="confirmShutdown()">
+    Shutdown Pi
+</button>
 <script>
 const el = {};
 
@@ -226,6 +229,21 @@ function resetEdid() {
     el.saveName.disabled = true;
     el.diffBlock.style.display = "none";
     setStatus("Idle", "idle");
+}
+function confirmShutdown() {
+    if (!confirm("⚠️ This will safely power off the Raspberry Pi.\n\nContinue?")) {
+        return;
+    }
+
+    setStatus("Shutting down…", "working");
+
+    fetch("/shutdown", { method: "POST" })
+        .then(() => {
+            setStatus("Powering off…", "success");
+        })
+        .catch(() => {
+            setStatus("Shutdown failed", "error");
+        });
 }
 </script>
 
