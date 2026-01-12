@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EDID Emulator WebApp</title>
+    <title>EDID Emulator</title>
     <style>
         body { font-family: Arial; max-width: 900px; margin: auto; }
         textarea { width: 100%; height: 260px; margin-top: 10px; }
@@ -18,14 +18,26 @@
 </head>
 <body>
 
+<div style="display:flex; justify-content:space-between; align-items:center;">
+    <div>Version: <b id="version">loading…</b></div>
+    <button onclick="updateRepo()">Update</button>
+</div>
+
+<hr>
+
 <h2>EDID Emulator</h2>
 
-<button onclick="readEdid()">Read EDID</button>
-<button onclick="resetEdid()">Reset</button>
-<button id="toggleView" onclick="toggleView()" disabled>View: Binary</button>
+<div style="margin-bottom:10px;">
+    <button onclick="readEdid()">Read EDID</button>
+    <button onclick="resetEdid()">Reset</button>
+    <button id="toggleView" onclick="toggleView()" disabled>
+        View: Binary
+    </button>
+</div>
 
 <p>Match: <b id="matchResult">—</b></p>
 
+<h3>EDID Preview</h3>
 <textarea id="preview" readonly></textarea>
 
 <h3>Save New EDID</h3>
@@ -54,8 +66,33 @@ function setStatus(msg, cls) {
     s.className = "status " + cls;
 }
 
+function loadVersion() {
+    fetch("/version")
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById("version").textContent = d.version;
+        });
+}
+
+function updateRepo() {
+    if (!confirm("Update application from GitHub?")) return;
+    setStatus("Updating repository...", "working");
+
+    fetch("/update_repo", { method: "POST" })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) {
+                setStatus("Update failed", "error");
+            } else {
+                setStatus("Update complete ✔ Restarting recommended", "success");
+                loadVersion();
+            }
+        });
+}
+
 function readEdid() {
     setStatus("Reading EDID...", "working");
+
     fetch("/read_and_compare_edid")
         .then(r => r.json())
         .then(d => {
@@ -71,11 +108,11 @@ function readEdid() {
             document.getElementById("toggleView").disabled = false;
 
             if (d.match === "UNKNOWN") {
-                document.getElementById("saveBtn").disabled = false;
-                document.getElementById("saveName").disabled = false;
+                saveBtn.disabled = false;
+                saveName.disabled = false;
             } else {
-                document.getElementById("saveBtn").disabled = true;
-                document.getElementById("saveName").disabled = true;
+                saveBtn.disabled = true;
+                saveName.disabled = true;
             }
 
             setBinaryView();
@@ -89,7 +126,7 @@ function toggleView() {
 
 function setBinaryView() {
     view = "binary";
-    document.getElementById("toggleView").textContent = "View: Binary";
+    toggleViewBtn().textContent = "View: Binary";
 
     const bin = atob(binaryB64);
     let out = "";
@@ -97,17 +134,17 @@ function setBinaryView() {
         out += bin.charCodeAt(i).toString(16).padStart(2, "0") + " ";
         if ((i + 1) % 16 === 0) out += "\n";
     }
-    document.getElementById("preview").value = out;
+    preview.value = out;
 }
 
 function setDecodedView() {
     view = "decoded";
-    document.getElementById("toggleView").textContent = "View: Decoded";
-    document.getElementById("preview").value = decoded;
+    toggleViewBtn().textContent = "View: Decoded";
+    preview.value = decoded;
 }
 
 function saveEdid() {
-    const name = document.getElementById("saveName").value.trim();
+    const name = saveName.value.trim();
     if (!name) return alert("Enter filename");
 
     fetch("/save_edid", {
@@ -117,16 +154,13 @@ function saveEdid() {
     })
     .then(r => r.json())
     .then(d => {
-        if (d.error) {
-            setStatus(d.error, "error");
-        } else {
-            setStatus("Saved successfully ✔", "success");
-        }
+        if (d.error) setStatus(d.error, "error");
+        else setStatus("Saved successfully ✔", "success");
     });
 }
 
 function writeEdid() {
-    const f = document.getElementById("writeSelect").value;
+    const f = writeSelect.value;
     if (!f) return alert("Select file");
 
     setStatus("Writing EDID...", "working");
@@ -152,14 +186,20 @@ function resetEdid() {
     binaryB64 = "";
     decoded = "";
     view = "binary";
-    document.getElementById("preview").value = "";
-    document.getElementById("matchResult").textContent = "—";
-    document.getElementById("toggleView").disabled = true;
-    document.getElementById("saveBtn").disabled = true;
-    document.getElementById("saveName").disabled = true;
-    document.getElementById("saveName").value = "";
+    preview.value = "";
+    matchResult.textContent = "—";
+    toggleViewBtn().disabled = true;
+    saveBtn.disabled = true;
+    saveName.disabled = true;
+    saveName.value = "";
     setStatus("Idle", "idle");
 }
+
+function toggleViewBtn() {
+    return document.getElementById("toggleView");
+}
+
+loadVersion();
 </script>
 
 </body>

@@ -30,15 +30,38 @@ def file_hash(path):
 
 @app.route("/")
 def index():
-    files = sorted(os.listdir(SAVE_DIR))
+    files = sorted(
+        f for f in os.listdir(SAVE_DIR)
+        if os.path.isfile(os.path.join(SAVE_DIR, f))
+    )
     return render_template("index.html", files=files)
+
+
+@app.route("/version")
+def version():
+    try:
+        out = subprocess.check_output(
+            ["git", "describe", "--tags", "--dirty", "--always"],
+            cwd=BASE_DIR
+        )
+        return jsonify({"version": out.decode().strip()})
+    except Exception:
+        return jsonify({"version": "unknown"})
+
+
+@app.route("/update_repo", methods=["POST"])
+def update_repo():
+    try:
+        subprocess.check_call(["git", "pull"], cwd=BASE_DIR)
+        return jsonify({"updated": True})
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/read_and_compare_edid", methods=["GET"])
 def read_and_compare_edid():
     port = request.args.get("port", DEFAULT_PORT)
 
-    # Read EDID
     stdout, stderr, rc = run_command([EDID_RW_PATH, port])
     if rc != 0:
         return jsonify({"error": stderr}), 500
@@ -100,12 +123,12 @@ def write_edid():
     if not os.path.isfile(path):
         return jsonify({"error": "EDID file not found"}), 404
 
-    # Load EDID binary
+    # Load EDID
     with open(path, "rb") as f:
         edid_data = f.read()
 
-    # WRITE (stdin pipe is REQUIRED)
-    stdout, stderr, rc = run_command(
+    # WRITE (pipe to stdin)
+    _, stderr, rc = run_command(
         [EDID_RW_PATH, "-w", "-f", port],
         input_data=edid_data
     )
