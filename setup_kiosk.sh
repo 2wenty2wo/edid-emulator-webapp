@@ -11,13 +11,15 @@ SYSTEMD_DIR="$HOME_DIR/.config/systemd/user"
 SERVICE_FILE="$SYSTEMD_DIR/edid-emulator.service"
 URL="http://127.0.0.1:5000"
 
-echo "=== EDID Emulator Kiosk Setup ==="
+echo "========================================"
+echo " EDID Emulator Kiosk Setup (Portrait DSI)"
+echo "========================================"
 
 echo "Installing dependencies..."
 sudo apt update
 sudo apt install -y epiphany-browser xdotool curl
 
-echo "Creating launcher script..."
+echo "Creating launcher script with DSI portrait support..."
 cat > "$SCRIPT_PATH" << 'EOF'
 #!/bin/bash
 
@@ -28,6 +30,16 @@ URL="http://127.0.0.1:5000"
 export DISPLAY=:0
 export XAUTHORITY="$HOME/.Xauthority"
 
+# --- Rotate DSI display to portrait (RIGHT) ---
+xrandr --output DSI-1 --rotate right
+
+# --- Align touchscreen (FT5x06) ---
+xinput set-prop "10-0038 generic ft5x06" \
+  "Coordinate Transformation Matrix" \
+  0 1 0 \
+ -1 0 1 \
+  0 0 1
+
 cd "$BACKEND_DIR"
 
 # Activate venv if present
@@ -35,20 +47,24 @@ if [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
+# Start Flask
 python3 app.py &
 
 FLASK_PID=$!
 
-echo "Waiting for Flask..."
+echo "Waiting for Flask to start..."
 for i in {1..20}; do
     curl -s "$URL" >/dev/null && break
     sleep 1
 done
 
+# Launch browser
 epiphany "$URL" &
 
+# Allow window to appear
 sleep 5
 
+# Fullscreen browser
 xdotool search --onlyvisible --class epiphany windowactivate --sync key F11
 
 wait $FLASK_PID
@@ -76,7 +92,7 @@ mkdir -p "$SYSTEMD_DIR"
 
 cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=EDID Emulator UI
+Description=EDID Emulator UI (Portrait DSI)
 After=graphical-session.target network-online.target
 
 [Service]
@@ -102,9 +118,14 @@ echo
 echo "========================================"
 echo " Setup complete!"
 echo
+echo "• DSI-1 display set to PORTRAIT"
+echo "• Touchscreen aligned (ft5x06)"
 echo "• Desktop icon created"
 echo "• Auto-start enabled at login"
-echo "• You can launch manually by clicking the icon"
 echo
-echo "Reboot or log out/in to test auto-start."
+echo "You can now:"
+echo "• Reboot, or"
+echo "• Log out / log back in, or"
+echo "• Click the desktop icon"
+echo
 echo "========================================"
