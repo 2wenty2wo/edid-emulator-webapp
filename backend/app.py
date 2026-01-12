@@ -43,7 +43,7 @@ def read_and_compare_edid():
     if rc != 0:
         return jsonify({"error": stderr}), 500
 
-    binary_data = stdout.encode()
+    binary_data = stdout
 
     # Decode
     decode = subprocess.run(
