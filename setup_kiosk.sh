@@ -67,7 +67,7 @@ epiphany "$URL" &
 
 # Fullscreen Epiphany (ROBUST)
 echo "Waiting for Epiphany window (by class)..."
-for i in {1..40}; do
+for i in {1..400}; do
     WIN_ID=$(xdotool search --onlyvisible --class epiphany 2>/dev/null | head -n 1)
     if [ -n "$WIN_ID" ]; then
         echo "Epiphany window detected: $WIN_ID"
