@@ -12,51 +12,48 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SAVE_DIR = os.path.join(BASE_DIR, "edid_Files")
 EDID_RW_PATH = os.path.join(BASE_DIR, "edid-rw", "edid-rw")
 
+USB_ROOT = "/media/mint"
+
 DEFAULT_PORT = "2"
 AVAILABLE_PORTS = ["0", "1", "2", "3"]
 
-USB_ROOT = "/media"
-
-
-# ------------------ helpers ------------------
+# ----------------------------
+# Utility helpers
+# ----------------------------
 
 def run_command(cmd, input_data=None):
-    p = subprocess.run(
-        cmd,
-        input=input_data,
-        capture_output=True
-    )
+    p = subprocess.run(cmd, input=input_data, capture_output=True)
     return p.stdout, p.stderr.decode(errors="ignore"), p.returncode
 
-
-def sha256_bytes(data: bytes):
+def file_hash_bytes(data: bytes):
     return hashlib.sha256(data).hexdigest()
 
-
-def sha256_file(path):
+def file_hash(path):
     with open(path, "rb") as f:
-        return sha256_bytes(f.read())
+        return file_hash_bytes(f.read())
 
-
-def find_usb_mounts():
-    mounts = []
+def list_usb_mounts():
     if not os.path.isdir(USB_ROOT):
-        return mounts
+        return []
+    return [
+        os.path.join(USB_ROOT, d)
+        for d in os.listdir(USB_ROOT)
+        if os.path.isdir(os.path.join(USB_ROOT, d))
+    ]
 
-    for user in os.listdir(USB_ROOT):
-        user_path = os.path.join(USB_ROOT, user)
-        if not os.path.isdir(user_path):
-            continue
+def is_read_only(path):
+    try:
+        test = os.path.join(path, ".write_test")
+        with open(test, "w") as f:
+            f.write("x")
+        os.remove(test)
+        return False
+    except Exception:
+        return True
 
-        for dev in os.listdir(user_path):
-            dev_path = os.path.join(user_path, dev)
-            if os.path.ismount(dev_path):
-                mounts.append(dev_path)
-
-    return mounts
-
-
-# ------------------ routes ------------------
+# ----------------------------
+# Main UI
+# ----------------------------
 
 @app.route("/")
 def index():
@@ -71,6 +68,9 @@ def index():
         default_port=DEFAULT_PORT
     )
 
+# ----------------------------
+# Version / Update
+# ----------------------------
 
 @app.route("/version")
 def version():
@@ -83,7 +83,6 @@ def version():
     except Exception:
         return jsonify({"version": "unknown"})
 
-
 @app.route("/update_repo", methods=["POST"])
 def update_repo():
     try:
@@ -92,8 +91,9 @@ def update_repo():
     except subprocess.CalledProcessError as e:
         return jsonify({"error": str(e)}), 500
 
-
-# ------------------ EDID ------------------
+# ----------------------------
+# EDID CORE (UNCHANGED)
+# ----------------------------
 
 @app.route("/read_and_compare_edid")
 def read_and_compare_edid():
@@ -104,19 +104,18 @@ def read_and_compare_edid():
         return jsonify({"error": stderr}), 500
 
     binary_data = stdout
-
     decode = subprocess.run(
         ["edid-decode"],
         input=binary_data,
         capture_output=True
     )
 
-    current_hash = sha256_bytes(binary_data)
+    current_hash = file_hash_bytes(binary_data)
     match = "UNKNOWN"
 
     for fname in os.listdir(SAVE_DIR):
         path = os.path.join(SAVE_DIR, fname)
-        if os.path.isfile(path) and sha256_file(path) == current_hash:
+        if os.path.isfile(path) and file_hash(path) == current_hash:
             match = fname
             break
 
@@ -125,7 +124,6 @@ def read_and_compare_edid():
         "binary_b64": base64.b64encode(binary_data).decode(),
         "decoded": decode.stdout.decode(errors="ignore")
     })
-
 
 @app.route("/save_edid", methods=["POST"])
 def save_edid():
@@ -141,7 +139,6 @@ def save_edid():
         f.write(base64.b64decode(binary_b64))
 
     return jsonify({"saved": True})
-
 
 @app.route("/write_edid", methods=["POST"])
 def write_edid():
@@ -167,7 +164,7 @@ def write_edid():
     if rc != 0:
         return jsonify({"written": True, "verified": False})
 
-    ok = sha256_bytes(intended) == sha256_bytes(read_back)
+    ok = file_hash_bytes(intended) == file_hash_bytes(read_back)
 
     diff = None
     if not ok:
@@ -183,96 +180,104 @@ def write_edid():
 
     return jsonify({"written": True, "verified": ok, "diff": diff})
 
+# ----------------------------
+# USB SUPPORT
+# ----------------------------
 
-# ------------------ USB ------------------
+@app.route("/usb/status")
+def usb_status():
+    mounts = list_usb_mounts()
+    result = []
+    for m in mounts:
+        result.append({
+            "path": m,
+            "name": os.path.basename(m),
+            "read_only": is_read_only(m)
+        })
+    return jsonify(result)
+
+@app.route("/usb/scan")
+def usb_scan():
+    mount = request.args.get("mount")
+    if not mount or not os.path.isdir(mount):
+        return jsonify({"error": "Invalid mount"}), 400
+
+    usb_bins = [
+        f for f in os.listdir(mount)
+        if f.lower().endswith(".bin")
+        and os.path.isfile(os.path.join(mount, f))
+    ]
+
+    local_hashes = {
+        f: file_hash(os.path.join(SAVE_DIR, f))
+        for f in os.listdir(SAVE_DIR)
+        if f.lower().endswith(".bin")
+    }
+
+    files = []
+    for f in usb_bins:
+        usb_path = os.path.join(mount, f)
+        usb_hash = file_hash(usb_path)
+        exists = usb_hash in local_hashes.values()
+
+        files.append({
+            "name": f,
+            "exists": exists
+        })
+
+    return jsonify(files)
 
 @app.route("/usb/import", methods=["POST"])
 def usb_import():
-    mounts = find_usb_mounts()
-    if not mounts:
-        return jsonify({"error": "No USB device found"}), 400
+    data = request.json
+    mount = data.get("mount")
+    files = data.get("files", [])
 
-    existing_hashes = {
-        sha256_file(os.path.join(SAVE_DIR, f))
-        for f in os.listdir(SAVE_DIR)
-        if os.path.isfile(os.path.join(SAVE_DIR, f))
-    }
+    imported = []
 
-    imported = 0
-    skipped = 0
+    for f in files:
+        src = os.path.join(mount, f)
+        dst = os.path.join(SAVE_DIR, f)
 
-    for mount in mounts:
-        for fname in os.listdir(mount):
-            if not fname.lower().endswith(".bin"):
-                continue
-
-            src = os.path.join(mount, fname)
-            dst = os.path.join(SAVE_DIR, fname)
-
-            if not os.path.isfile(src):
-                continue
-
-            src_hash = sha256_file(src)
-
-            if os.path.exists(dst) or src_hash in existing_hashes:
-                skipped += 1
-                continue
-
+        if not os.path.exists(dst):
             shutil.copy2(src, dst)
-            existing_hashes.add(src_hash)
-            imported += 1
+            imported.append(f)
 
-    return jsonify({
-        "imported": imported,
-        "skipped": skipped
-    })
-
+    return jsonify({"imported": imported})
 
 @app.route("/usb/export", methods=["POST"])
 def usb_export():
-    mounts = find_usb_mounts()
-    if not mounts:
-        return jsonify({"error": "No USB device found"}), 400
+    data = request.json
+    mount = data.get("mount")
+    files = data.get("files", [])
 
-    exported = 0
-    skipped = 0
+    exported = []
 
-    for mount in mounts:
-        for fname in os.listdir(SAVE_DIR):
-            src = os.path.join(SAVE_DIR, fname)
-            dst = os.path.join(mount, fname)
+    for f in files:
+        src = os.path.join(SAVE_DIR, f)
+        dst = os.path.join(mount, f)
 
-            if not os.path.isfile(src):
-                continue
-
-            if os.path.exists(dst):
-                skipped += 1
-                continue
-
+        if os.path.exists(src) and not os.path.exists(dst):
             shutil.copy2(src, dst)
-            exported += 1
+            exported.append(f)
 
-    return jsonify({
-        "exported": exported,
-        "skipped": skipped
-    })
+    return jsonify({"exported": exported})
 
+# ----------------------------
+# Power
+# ----------------------------
 
-# ------------------ SYSTEM ------------------
-
-@app.route("/system/shutdown", methods=["POST"])
-def system_shutdown():
+@app.route("/shutdown", methods=["POST"])
+def shutdown():
     subprocess.Popen(["sudo", "shutdown", "-h", "now"])
     return jsonify({"ok": True})
 
-
-@app.route("/system/reboot", methods=["POST"])
-def system_reboot():
+@app.route("/reboot", methods=["POST"])
+def reboot():
     subprocess.Popen(["sudo", "reboot"])
     return jsonify({"ok": True})
 
-
-# ------------------ main ------------------
+# ----------------------------
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
