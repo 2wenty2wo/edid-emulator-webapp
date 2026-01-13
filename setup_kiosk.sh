@@ -80,7 +80,7 @@ done
 # Launch Epiphany in kiosk (app) mode
 # -------------------------------------------------
 echo "Launching Epiphany..."
-epiphany --application-id=edid-emulator "$URL" &
+epiphany --application-id edid-emulator "$URL" &
 
 echo "Kiosk startup complete"
 wait
@@ -111,7 +111,7 @@ WantedBy=default.target
 EOF
 
 # -------------------------------------------------
-# Enable service
+# Enable systemd service
 # -------------------------------------------------
 echo "Enabling systemd service..."
 systemctl --user daemon-reload
