@@ -7,6 +7,13 @@ SERVICE_DIR="$HOME/.config/systemd/user"
 
 echo "=== EDID Emulator Kiosk Setup ==="
 
+# -------------------------------------------------
+# Ensure required packages exist
+# -------------------------------------------------
+echo "Installing required packages..."
+sudo apt update
+sudo apt install -y wmctrl xdotool curl
+
 mkdir -p "$SERVICE_DIR"
 
 # -------------------------------------------------
@@ -42,19 +49,17 @@ for i in {1..30}; do
 done
 
 # -------------------------------------------------
-# Rotate display to portrait
+# Rotate display
 # -------------------------------------------------
-xrandr --output DSI-1 --rotate right || echo "xrandr rotate failed"
+xrandr --output DSI-1 --rotate right || echo "Rotation skipped"
 
 # -------------------------------------------------
-# Map FT5x06 touchscreen to DSI-1
+# Map touchscreen
 # -------------------------------------------------
 TOUCH_ID=$(xinput list | grep -i 'ft5x06' | grep -o 'id=[0-9]*' | cut -d= -f2)
 if [ -n "$TOUCH_ID" ]; then
     echo "Mapping touchscreen ID $TOUCH_ID"
     xinput map-to-output "$TOUCH_ID" DSI-1
-else
-    echo "Touchscreen device not found"
 fi
 
 # -------------------------------------------------
@@ -66,7 +71,6 @@ cd "$BACKEND_DIR" || exit 1
 echo "Starting Flask..."
 python3 app.py &
 
-# Wait for Flask
 for i in {1..30}; do
     curl -s "$URL" >/dev/null && break
     echo "Waiting for Flask..."
@@ -80,15 +84,15 @@ echo "Launching Epiphany..."
 epiphany "$URL" &
 
 # -------------------------------------------------
-# Force fullscreen (SAFE METHOD)
+# Force fullscreen (SAFE & RELIABLE)
 # -------------------------------------------------
-echo "Waiting for browser to appear..."
+echo "Waiting for browser window..."
 for i in {1..40}; do
-    if wmctrl -l | grep -i epiphany >/dev/null; then
+    if wmctrl -l | grep -i epiphany >/dev/null 2>&1; then
+        echo "Epiphany detected — applying fullscreen"
         wmctrl -a epiphany
         sleep 0.3
         xdotool key F11
-        echo "Fullscreen applied"
         break
     fi
     sleep 0.5
@@ -123,27 +127,10 @@ EOF
 systemctl --user daemon-reload
 systemctl --user enable edid-emulator.service
 
-# -------------------------------------------------
-# Desktop launcher
-# -------------------------------------------------
-mkdir -p "$HOME/Desktop"
-
-cat > "$HOME/Desktop/EDID-Emulator.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=EDID Emulator
-Exec=$APP_DIR/start_edid_ui.sh
-Icon=utilities-terminal
-Terminal=false
-Categories=Utility;
-EOF
-
-chmod +x "$HOME/Desktop/EDID-Emulator.desktop"
-
 echo
 echo "=== Setup complete ==="
 echo "Reboot recommended:"
 echo "  sudo reboot"
 echo
-echo "Startup log:"
+echo "Log file:"
 echo "  cat ~/edid_kiosk.log"
