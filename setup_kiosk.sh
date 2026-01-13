@@ -12,8 +12,6 @@ mkdir -p "$SERVICE_DIR"
 # -------------------------------------------------
 # Create kiosk startup script
 # -------------------------------------------------
-echo "Creating start_edid_ui.sh..."
-
 cat > "$APP_DIR/start_edid_ui.sh" <<'EOF'
 #!/bin/bash
 
@@ -53,10 +51,7 @@ xrandr --output DSI-1 --rotate right || echo "xrandr rotate failed"
 # -------------------------------------------------
 TOUCH_ID=$(xinput list | grep -i 'ft5x06' | grep -o 'id=[0-9]*' | cut -d= -f2)
 if [ -n "$TOUCH_ID" ]; then
-    echo "Mapping touchscreen ID $TOUCH_ID to DSI-1"
     xinput map-to-output "$TOUCH_ID" DSI-1
-else
-    echo "Touchscreen device not found"
 fi
 
 # -------------------------------------------------
@@ -65,22 +60,34 @@ fi
 cd "$BACKEND_DIR" || exit 1
 [ -f venv/bin/activate ] && source venv/bin/activate
 
-echo "Starting Flask server..."
+echo "Starting Flask..."
 python3 app.py &
-FLASK_PID=$!
 
-# Wait for Flask to respond
+# Wait for Flask
 for i in {1..30}; do
     curl -s "$URL" >/dev/null && break
-    echo "Waiting for Flask..."
     sleep 1
 done
 
 # -------------------------------------------------
-# Launch Epiphany in kiosk (app) mode
+# Launch Epiphany
 # -------------------------------------------------
 echo "Launching Epiphany..."
-epiphany --application-id edid-emulator "$URL" &
+epiphany "$URL" &
+
+# -------------------------------------------------
+# Force fullscreen via xdotool
+# -------------------------------------------------
+echo "Waiting for browser window..."
+for i in {1..20}; do
+    WIN_ID=$(xdotool search --onlyvisible --name "EDID Emulator\|127.0.0.1")
+    if [ -n "$WIN_ID" ]; then
+        xdotool windowactivate --sync "$WIN_ID" key F11
+        echo "Fullscreen applied"
+        break
+    fi
+    sleep 0.5
+done
 
 echo "Kiosk startup complete"
 wait
@@ -89,10 +96,8 @@ EOF
 chmod +x "$APP_DIR/start_edid_ui.sh"
 
 # -------------------------------------------------
-# Create systemd user service
+# systemd user service
 # -------------------------------------------------
-echo "Creating systemd user service..."
-
 cat > "$SERVICE_DIR/edid-emulator.service" <<EOF
 [Unit]
 Description=EDID Emulator Kiosk
@@ -110,18 +115,12 @@ Environment=XAUTHORITY=$HOME/.Xauthority
 WantedBy=default.target
 EOF
 
-# -------------------------------------------------
-# Enable systemd service
-# -------------------------------------------------
-echo "Enabling systemd service..."
 systemctl --user daemon-reload
 systemctl --user enable edid-emulator.service
 
 # -------------------------------------------------
-# Create desktop launcher
+# Desktop launcher
 # -------------------------------------------------
-echo "Creating desktop icon..."
-
 mkdir -p "$HOME/Desktop"
 
 cat > "$HOME/Desktop/EDID-Emulator.desktop" <<EOF
@@ -136,11 +135,4 @@ EOF
 
 chmod +x "$HOME/Desktop/EDID-Emulator.desktop"
 
-echo
-echo "=== Setup complete ==="
-echo
-echo "Reboot to test kiosk startup:"
-echo "  sudo reboot"
-echo
-echo "Startup log:"
-echo "  cat ~/edid_kiosk.log"
+echo "Setup complete. Reboot recommended."
