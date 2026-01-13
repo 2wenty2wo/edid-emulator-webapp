@@ -108,4 +108,39 @@ Environment=XAUTHORITY=$HOME/.Xauthority
 
 [Install]
 WantedBy=default.target
-E
+EOF
+
+# -------------------------------------------------
+# Enable service
+# -------------------------------------------------
+echo "Enabling systemd service..."
+systemctl --user daemon-reload
+systemctl --user enable edid-emulator.service
+
+# -------------------------------------------------
+# Create desktop launcher
+# -------------------------------------------------
+echo "Creating desktop icon..."
+
+mkdir -p "$HOME/Desktop"
+
+cat > "$HOME/Desktop/EDID-Emulator.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=EDID Emulator
+Exec=$APP_DIR/start_edid_ui.sh
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;
+EOF
+
+chmod +x "$HOME/Desktop/EDID-Emulator.desktop"
+
+echo
+echo "=== Setup complete ==="
+echo
+echo "Reboot to test kiosk startup:"
+echo "  sudo reboot"
+echo
+echo "Startup log:"
+echo "  cat ~/edid_kiosk.log"
