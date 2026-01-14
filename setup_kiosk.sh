@@ -8,7 +8,7 @@ SERVICE_DIR="$HOME/.config/systemd/user"
 echo "=== EDID Emulator Kiosk Setup ==="
 
 sudo apt update
-sudo apt install -y wmctrl xdotool curl chromium-browser
+sudo apt install -y curl chromium-browser
 
 mkdir -p "$SERVICE_DIR"
 
@@ -63,21 +63,7 @@ done
 
 # Launch browser
 echo "Launching Chromium..."
-chromium-browser --kiosk --start-fullscreen --window-size=800,480 --force-device-scale-factor=1 "$URL" &
-
-# Fullscreen Chromium (ROBUST)
-echo "Waiting for Chromium window (by class)..."
-for i in {1..400}; do
-    WIN_ID=$(xdotool search --onlyvisible --class chromium 2>/dev/null | head -n 1)
-    if [ -n "$WIN_ID" ]; then
-        echo "Chromium window detected: $WIN_ID"
-        xdotool windowactivate "$WIN_ID"
-        sleep 0.4
-        xdotool key F11
-        break
-    fi
-    sleep 0.5
-done
+chromium-browser --kiosk --start-fullscreen --start-maximized --disable-infobars --no-first-run --disable-session-crashed-bubble --window-size=800,480 --force-device-scale-factor=1 "$URL" &
 
 echo "Kiosk startup complete"
 wait
