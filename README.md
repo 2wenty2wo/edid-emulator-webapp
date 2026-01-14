@@ -24,7 +24,10 @@ git clone https://github.com/padge81/edid-emulator-webapp.git
 
 ## ⚙️ Run Setup:
 ```
-cd edid-emulator-webapp
+cd edid-emulator-webapp/backend
+chmod +x setup.sh
+./setup.sh
+cd ..
 chmod +x setup_kiosk.sh
 ./setup_kiosk.sh
 sudo reboot
