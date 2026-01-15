@@ -1,34 +1,31 @@
-@ -10,12 +10,10 @@
+
             color: #e0e0e0;
             font-family: Arial, Helvetica, sans-serif;
             margin: 0;
-            padding: 10px;
             padding: 10px 10px 90px 10px;
+            padding: 10px;
         }
 
+        h1, h2, h3 { margin: 10px 0; }
         h1, h2, h3 {
             margin: 10px 0;
         }
-        h1, h2, h3 { margin: 10px 0; }
 
         button, select, input {
             font-size: 18px;
-@ -31,9 +29,7 @@
             border: 2px solid #444;
         }
 
+        button:active { background: #333; }
         button:active {
             background: #333;
         }
-        button:active { background: #333; }
 
         select, input {
             background: #111;
-@ -66,18 +62,48 @@
             background: #111;
         }
 
-        .status {
         /* ===== FLOATING STATUS BAR ===== */
         #statusBar {
             position: fixed;
@@ -42,10 +39,8 @@
             justify-content: center;
             gap: 12px;
 
+        .status {
             font-size: 18px;
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 8px;
             padding: 14px;
             border-radius: 12px;
             box-shadow: 0 6px 20px rgba(0,0,0,0.8);
@@ -67,46 +62,48 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 8px;
         }
 
-        .idle { background: #2c2c2c; }
-        .working { background: #7f6a00; }
-        .success { background: #006644; }
-        .warning { background: #664400; }
-        .error { background: #660000; }
         .idle    { background: #2c2c2c; opacity: 0.35; }
         .working { background: #7f6a00; opacity: 1; }
         .success { background: #006644; opacity: 1; }
         .warning { background: #664400; opacity: 1; }
         .error   { background: #660000; opacity: 1; }
+        .idle { background: #2c2c2c; }
+        .working { background: #7f6a00; }
+        .success { background: #006644; }
+        .warning { background: #664400; }
+        .error { background: #660000; }
 
         .danger {
             background: #8b0000;
-@ -98,12 +124,10 @@
             font-size: 13px;
         }
 
+        label { font-size: 18px; margin-right: 10px; }
         label {
             font-size: 18px;
             margin-right: 10px;
         }
-        label { font-size: 18px; margin-right: 10px; }
     </style>
 </head>
 
 <body>
 
 <h1>EDID Emulator</h1>
-@ -156,19 +180,10 @@
+
 
 <div class="card">
     <h2>USB Import / Export</h2>
+    <button onclick="loadUsb()">Scan USB</button>
 
     <div class="row">
         <button onclick="loadUsb()">Scan USB</button>
     </div>
 
-    <button onclick="loadUsb()">Scan USB</button>
     <div id="usbArea"></div>
 </div>
 
@@ -118,7 +115,6 @@
 <div class="card">
     <h2>Verification Diff</h2>
     <pre id="diff"></pre>
-@ -182,181 +197,38 @@
     </div>
 </div>
 
@@ -130,12 +126,15 @@
 
 <script>
 const el = {};
+let statusTimer = null;
 let binaryB64 = "";
 let decoded = "";
 let view = "binary";
-let statusTimer = null;
 
 window.addEventListener("DOMContentLoaded", () => {
+    el.statusBar = document.getElementById("statusBar");
+    el.statusText = document.getElementById("statusText");
+    el.spinner = document.getElementById("spinner");
     el.status = document.getElementById("status");
     el.preview = document.getElementById("preview");
     el.matchResult = document.getElementById("matchResult");
@@ -149,18 +148,17 @@ window.addEventListener("DOMContentLoaded", () => {
     el.usbArea = document.getElementById("usbArea");
 
     loadVersion();
-    el.statusBar = document.getElementById("statusBar");
-    el.statusText = document.getElementById("statusText");
-    el.spinner = document.getElementById("spinner");
 });
 
 /* ===== STATUS MANAGER ===== */
 function setStatus(msg, cls) {
+    clearTimeout(statusTimer);
     el.status.textContent = msg;
     el.status.className = "status " + cls;
 }
-    clearTimeout(statusTimer);
 
+    el.statusText.textContent = msg;
+    el.statusBar.className = cls;
 function loadVersion() {
     fetch("/version").then(r => r.json()).then(d => el.version.textContent = d.version);
 }
@@ -174,9 +172,8 @@ function updateRepo() {
             loadVersion();
         });
 }
-    el.statusText.textContent = msg;
-    el.statusBar.className = cls;
 
+    el.spinner.style.display = (cls === "working") ? "block" : "none";
 function readEdid() {
     setStatus("Reading EDID…", "working");
     fetch(`/read_and_compare_edid?port=${el.portSelect.value}`)
@@ -192,8 +189,13 @@ function readEdid() {
             setStatus("Read complete ✔", "success");
         });
 }
-    el.spinner.style.display = (cls === "working") ? "block" : "none";
 
+    // Auto-hide success after 3s
+    if (cls === "success") {
+        statusTimer = setTimeout(() => {
+            el.statusText.textContent = "Idle";
+            el.statusBar.className = "idle";
+        }, 3000);
 function toggleView() {
     view === "binary" ? setDecodedView() : setBinaryView();
 }
@@ -206,12 +208,6 @@ function setBinaryView() {
     for (let i = 0; i < bin.length; i++) {
         out += bin.charCodeAt(i).toString(16).padStart(2, "0") + " ";
         if ((i + 1) % 16 === 0) out += "\n";
-    // Auto-hide success after 3s
-    if (cls === "success") {
-        statusTimer = setTimeout(() => {
-            el.statusText.textContent = "Idle";
-            el.statusBar.className = "idle";
-        }, 3000);
     }
     el.preview.value = out;
 }
