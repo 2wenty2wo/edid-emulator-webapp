@@ -1,195 +1,15 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>EDID Emulator</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <style>
-        body {
-            background: #0b0b0b;
-            color: #e0e0e0;
-            font-family: Arial, Helvetica, sans-serif;
-            margin: 0;
-            padding: 10px;
-        }
-
-        h1, h2, h3 {
-            margin: 10px 0;
-        }
-
-        button, select, input {
-            font-size: 18px;
-            padding: 14px 18px;
-            margin: 6px 6px 6px 0;
-            border-radius: 6px;
-            border: none;
-        }
-
-        button {
-            background: #1e1e1e;
-            color: #fff;
-            border: 2px solid #444;
-        }
-
-        button:active {
-            background: #333;
-        }
-
-        select, input {
-            background: #111;
-            color: #fff;
-            border: 2px solid #444;
-        }
-
-        textarea {
-            width: 100%;
-            height: 220px;
-            background: #000;
-            color: #0f0;
-            font-family: monospace;
-            font-size: 14px;
-            border: 2px solid #333;
-            padding: 10px;
-        }
-
-        .row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .card {
-            border: 2px solid #333;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 12px;
-            background: #111;
-        }
-
-        .status {
-            font-size: 18px;
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 8px;
-        }
-
-        .idle { background: #2c2c2c; }
-        .working { background: #7f6a00; }
-        .success { background: #006644; }
-        .warning { background: #664400; }
-        .error { background: #660000; }
-
-        .danger {
-            background: #8b0000;
-            border-color: #ff4444;
-        }
-
-        .power {
-            background: #111;
-            border: 2px solid #600;
-            color: #ff7777;
-        }
-
-        pre {
-            background: #000;
-            color: #0f0;
-            padding: 10px;
-            overflow-x: auto;
-            font-size: 13px;
-        }
-
-        label {
-            font-size: 18px;
-            margin-right: 10px;
-        }
-    </style>
-</head>
-<body>
-
-<h1>EDID Emulator</h1>
-
-<div class="row">
-    <div>Version: <b id="version">loading…</b></div>
-    <button onclick="updateRepo()">Update</button>
-</div>
-
-<div class="card">
-    <h2>Target Port</h2>
-    <label>I²C Port:</label>
-    <select id="portSelect">
-        {% for p in ports %}
-            <option value="{{ p }}" {% if p == default_port %}selected{% endif %}>{{ p }}</option>
-        {% endfor %}
-    </select>
-</div>
-
-<div class="card">
-    <h2>EDID Operations</h2>
-    <div class="row">
-        <button onclick="readEdid()">Read EDID</button>
-        <button onclick="resetEdid()">Reset</button>
-        <button id="toggleView" onclick="toggleView()" disabled>View: Binary</button>
-    </div>
-
-    <p>Match: <b id="matchResult">—</b></p>
-    <textarea id="preview" readonly></textarea>
-</div>
-
-<div class="card">
-    <h2>Save / Write</h2>
-
-    <div class="row">
-        <input id="saveName" placeholder="filename.bin" disabled>
-        <button id="saveBtn" onclick="saveEdid()" disabled>Save</button>
-    </div>
-
-    <div class="row">
-        <select id="writeSelect">
-            <option value="">-- select EDID --</option>
-            {% for f in files %}
-                <option value="{{ f }}">{{ f }}</option>
-            {% endfor %}
-        </select>
-        <button onclick="confirmWrite()">Write</button>
-    </div>
-</div>
-
-<div class="card">
-    <h2>USB Import / Export</h2>
-
-    <div class="row">
-        <button onclick="loadUsb()">Scan USB</button>
-    </div>
-
-    <div id="usbArea"></div>
-</div>
-
-<div class="card">
-    <h2>Status</h2>
-    <div id="status" class="status idle">Idle</div>
-</div>
-
-<div class="card">
-    <h2>Verification Diff</h2>
-    <pre id="diff"></pre>
-</div>
-
-<div class="card">
-    <h2>Power</h2>
-    <div class="row">
-        <button class="power" onclick="confirmReboot()">Reboot</button>
-        <button class="power danger" onclick="confirmShutdown()">Shutdown</button>
-    </div>
-</div>
-
 <script>
 const el = {};
 let binaryB64 = "";
 let decoded = "";
 let view = "binary";
+let statusTimer = null;
 
 window.addEventListener("DOMContentLoaded", () => {
-    el.status = document.getElementById("status");
+    el.statusBar = document.getElementById("statusBar");
+    el.statusText = document.getElementById("statusText");
+    el.spinner = document.getElementById("spinner");
+
     el.preview = document.getElementById("preview");
     el.matchResult = document.getElementById("matchResult");
     el.toggleView = document.getElementById("toggleView");
@@ -204,23 +24,25 @@ window.addEventListener("DOMContentLoaded", () => {
     loadVersion();
 });
 
+/* ===== STATUS BAR ===== */
 function setStatus(msg, cls) {
-    el.status.textContent = msg;
-    el.status.className = "status " + cls;
+    clearTimeout(statusTimer);
+
+    el.statusText.textContent = msg;
+    el.statusBar.className = cls;
+    el.spinner.style.display = (cls === "working") ? "block" : "none";
+
+    if (cls === "success") {
+        statusTimer = setTimeout(() => {
+            el.statusText.textContent = "Idle";
+            el.statusBar.className = "idle";
+        }, 3000);
+    }
 }
 
+/* ===== CORE ===== */
 function loadVersion() {
     fetch("/version").then(r => r.json()).then(d => el.version.textContent = d.version);
-}
-
-function updateRepo() {
-    if (!confirm("Update from GitHub?")) return;
-    setStatus("Updating…", "working");
-    fetch("/update_repo", { method: "POST" })
-        .then(() => {
-            setStatus("Updated ✔", "success");
-            loadVersion();
-        });
 }
 
 function readEdid() {
@@ -310,6 +132,7 @@ function resetEdid() {
     setStatus("Idle", "idle");
 }
 
+/* ===== USB ===== */
 function loadUsb() {
     el.usbArea.innerHTML = "";
     fetch("/usb/status")
@@ -358,29 +181,4 @@ function confirmReboot() {
     if (!confirm("Reboot system?")) return;
     fetch("/reboot", { method: "POST" });
 }
-let statusTimer = null;
-
-function setStatus(msg, cls) {
-    clearTimeout(statusTimer);
-
-    const bar = document.getElementById("statusBar");
-    const text = document.getElementById("statusText");
-    const spinner = document.getElementById("spinner");
-
-    text.textContent = msg;
-    bar.className = cls;
-
-    spinner.style.display = (cls === "working") ? "block" : "none";
-
-    if (cls === "success") {
-        statusTimer = setTimeout(() => {
-            text.textContent = "Idle";
-            bar.className = "idle";
-        }, 3000);
-    }
-}
-
 </script>
-
-</body>
-</html>
